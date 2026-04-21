@@ -6,6 +6,13 @@ function ScrcpyPanel() {
   const [running, setRunning] = useState(false);
   const [scrcpyPath, setScrcpyPath] = useState('scrcpy');
   const [size, setSize] = useState('960x540');
+
+  // Load bundled scrcpy path on startup
+  useEffect(() => {
+    if (window.scrcpy) {
+      window.scrcpy.getPath().then(p => setScrcpyPath(p));
+    }
+  }, []);
   const [bitrate, setBitrate] = useState(8);
   const [maxFps, setMaxFps] = useState(30);
   const [noControl, setNoControl] = useState(false);

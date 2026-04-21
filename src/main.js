@@ -8,6 +8,22 @@ if (require('electron-squirrel-startup')) {
 
 let scrcpyProcess = null;
 
+// Find bundled scrcpy path
+const getBundledScrcpyPath = () => {
+  const possiblePaths = [
+    // In development
+    path.join(__dirname, '..', '..', 'resources', 'scrcpy', 'scrcpy.exe'),
+    // In packaged app
+    path.join(process.resourcesPath, 'scrcpy', 'scrcpy.exe'),
+  ];
+
+  const fs = require('fs');
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'scrcpy'; // fallback to PATH
+};
+
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1400,
@@ -33,7 +49,7 @@ ipcMain.handle('start-scrcpy', (event, args) => {
     return { success: false, message: 'Already running' };
   }
 
-  const scrcpyPath = args.path || 'scrcpy';
+  const scrcpyPath = args.path || getBundledScrcpyPath();
   const cmdArgs = ['--no-audio'];
 
   if (args.width && args.height) {
@@ -90,6 +106,10 @@ ipcMain.handle('stop-scrcpy', () => {
 
 ipcMain.handle('scrcpy-status', () => {
   return { running: scrcpyProcess !== null && scrcpyProcess.exitCode === null };
+});
+
+ipcMain.handle('get-scrcpy-path', () => {
+  return getBundledScrcpyPath();
 });
 
 app.whenReady().then(() => {
