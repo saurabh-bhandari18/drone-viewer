@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 
@@ -6,43 +6,7 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
-let wsScrcpyProcess = null;
-
-const startWsScrcpy = () => {
-  const wsScrcpyDir = path.join(__dirname, '..', '..', 'ws-scrcpy');
-
-  console.log('Starting ws-scrcpy server from:', wsScrcpyDir);
-
-  wsScrcpyProcess = spawn('npm', ['start'], {
-    cwd: wsScrcpyDir,
-    shell: true,
-    stdio: 'pipe',
-  });
-
-  wsScrcpyProcess.stdout.on('data', (data) => {
-    console.log(`[ws-scrcpy] ${data.toString().trim()}`);
-  });
-
-  wsScrcpyProcess.stderr.on('data', (data) => {
-    console.error(`[ws-scrcpy] ${data.toString().trim()}`);
-  });
-
-  wsScrcpyProcess.on('error', (err) => {
-    console.error('Failed to start ws-scrcpy:', err.message);
-  });
-
-  wsScrcpyProcess.on('close', (code) => {
-    console.log(`ws-scrcpy exited with code ${code}`);
-  });
-};
-
-const stopWsScrcpy = () => {
-  if (wsScrcpyProcess) {
-    wsScrcpyProcess.kill();
-    wsScrcpyProcess = null;
-    console.log('ws-scrcpy stopped');
-  }
-};
+let scrcpyProcess = null;
 
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -55,20 +19,81 @@ const createWindow = () => {
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webviewTag: true,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 };
 
+// IPC handlers for scrcpy control from renderer
+ipcMain.handle('start-scrcpy', (event, args) => {
+  if (scrcpyProcess && scrcpyProcess.exitCode === null) {
+    return { success: false, message: 'Already running' };
+  }
+
+  const scrcpyPath = args.path || 'scrcpy';
+  const cmdArgs = ['--no-audio'];
+
+  if (args.width && args.height) {
+    cmdArgs.push('--window-width', String(args.width));
+    cmdArgs.push('--window-height', String(args.height));
+  }
+
+  if (args.bitrate) {
+    cmdArgs.push('--video-bit-rate', `${args.bitrate}M`);
+  }
+
+  if (args.maxFps) {
+    cmdArgs.push('--max-fps', String(args.maxFps));
+  }
+
+  if (args.noControl) {
+    cmdArgs.push('--no-control');
+  }
+
+  if (args.alwaysOnTop) {
+    cmdArgs.push('--always-on-top');
+  }
+
+  if (args.borderless) {
+    cmdArgs.push('--window-borderless');
+  }
+
+  try {
+    scrcpyProcess = spawn(scrcpyPath, cmdArgs, { shell: true });
+
+    scrcpyProcess.on('error', (err) => {
+      console.error('scrcpy error:', err.message);
+    });
+
+    scrcpyProcess.on('close', (code) => {
+      console.log(`scrcpy exited with code ${code}`);
+      scrcpyProcess = null;
+    });
+
+    return { success: true, pid: scrcpyProcess.pid };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+});
+
+ipcMain.handle('stop-scrcpy', () => {
+  if (scrcpyProcess) {
+    scrcpyProcess.kill();
+    scrcpyProcess = null;
+    return { success: true };
+  }
+  return { success: false, message: 'Not running' };
+});
+
+ipcMain.handle('scrcpy-status', () => {
+  return { running: scrcpyProcess !== null && scrcpyProcess.exitCode === null };
+});
+
 app.whenReady().then(() => {
-  startWsScrcpy();
-
-  // Give ws-scrcpy a moment to start before opening the window
-  setTimeout(() => {
-    createWindow();
-  }, 2000);
-
+  createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -77,12 +102,12 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  if (scrcpyProcess) scrcpyProcess.kill();
   if (process.platform !== 'darwin') {
-    stopWsScrcpy();
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  stopWsScrcpy();
+  if (scrcpyProcess) scrcpyProcess.kill();
 });
