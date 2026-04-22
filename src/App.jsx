@@ -55,13 +55,10 @@ function StreamPanel() {
       {/* Video */}
       <div className="flex-1 bg-black flex items-center justify-center">
         {activeUrl ? (
-          <img
+          <webview
             src={activeUrl}
-            alt="Drone Screen"
-            className="max-w-full max-h-full object-contain"
-            onError={() => {
-              setConnected(false);
-            }}
+            className="w-full h-full"
+            style={{ background: '#000' }}
           />
         ) : (
           <div className="text-center text-gray-600">
