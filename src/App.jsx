@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 // ===== CONFIGURATION =====
-const DEFAULT_STREAM_URL = 'http://192.168.42.129:8081/stream';  // Android controller MJPEG stream
+// Android controller's USB tethering IP — serves MJPEG screen mirror on port 8081
+const DEFAULT_STREAM_URL = 'http://192.168.42.129:8081/';
+// Foxglove point cloud viewer — runs on the drone's companion computer
 const DEFAULT_FOXGLOVE_URL = 'http://192.168.144.50:8080/?ds=rosbridge-websocket&ds.url=ws%3A%2F%2F192.168.144.50%3A9090';
 // ==========================
 
